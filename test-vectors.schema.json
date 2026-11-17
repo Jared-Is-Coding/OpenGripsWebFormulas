@@ -1,0 +1,928 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://opengrips.app/schemas/force-curve-test-vectors.schema.json",
+    "title": "OpenGrips Force Curve Test Vectors",
+    "description": "Language-agnostic canonical test vectors for the OpenGrips ideal force curve, benchmark derivation, section classification, rep targets, and dataset aggregation (all weights in kg).",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "$schema",
+        "version",
+        "metadata",
+        "constants",
+        "idealForceCurve",
+        "deriveBenchmarkWeight",
+        "sectionClassification",
+        "repTargetsPerSection",
+        "manualEnergyCurve",
+        "forceCurveDataset"
+    ],
+    "properties": {
+        "$schema": {
+            "type": "string"
+        },
+        "version": {
+            "type": "string"
+        },
+        "metadata": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "description",
+                "sourceRepository",
+                "sourceFiles",
+                "tolerances"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "sourceRepository": {
+                    "type": "string"
+                },
+                "sourceFiles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "tolerances": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "floatTolerance",
+                        "benchmarkDerivationTolerance"
+                    ],
+                    "properties": {
+                        "floatTolerance": {
+                            "type": "number",
+                            "exclusiveMinimum": 0
+                        },
+                        "benchmarkDerivationTolerance": {
+                            "type": "number",
+                            "exclusiveMinimum": 0
+                        }
+                    }
+                }
+            }
+        },
+        "constants": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "BALANCED_RATIO",
+                "CURVE_T0_SECONDS",
+                "CURVE_T_END_SECONDS",
+                "ENDURANCE_MIN_WEIGHT_OFFSET_KG",
+                "MIN_CURVE_WEIGHT_FLOOR_KG",
+                "CURVE_EPSILON",
+                "DEFAULT_FIRST_HANG_TARGET",
+                "DEFAULT_REPS",
+                "DEFAULT_REST",
+                "DEFAULT_POWER",
+                "DEFAULT_POWER_ENDURANCE",
+                "DEFAULT_ENDURANCE",
+                "MIN_ENDURANCE",
+                "MAX_ENDURANCE",
+                "MIN_POWER_ENDURANCE",
+                "MAX_POWER_ENDURANCE",
+                "MIN_POWER",
+                "MAX_POWER",
+                "ENDURANCE_WEIGHT_FROM_BALANCED_RATIO",
+                "POWER_FIRST_REP_SECONDS",
+                "ENDURANCE_FIRST_REP_SECONDS",
+                "SECTION_WEIGHT_CURVE_EXPONENT",
+                "SECTION_TIME_CURVE_EXPONENT",
+                "CURVE_SECTIONS",
+                "SECTION_CURVE_MODEL",
+                "SESSION_TEMPLATES",
+                "SECTION_STROKE_COLORS"
+            ],
+            "properties": {
+                "BALANCED_RATIO": {
+                    "type": "number"
+                },
+                "CURVE_T0_SECONDS": {
+                    "type": "number"
+                },
+                "CURVE_T_END_SECONDS": {
+                    "type": "number"
+                },
+                "ENDURANCE_MIN_WEIGHT_OFFSET_KG": {
+                    "type": "number"
+                },
+                "MIN_CURVE_WEIGHT_FLOOR_KG": {
+                    "type": "number"
+                },
+                "CURVE_EPSILON": {
+                    "type": "number"
+                },
+                "DEFAULT_FIRST_HANG_TARGET": {
+                    "type": "integer"
+                },
+                "DEFAULT_REPS": {
+                    "type": "integer"
+                },
+                "DEFAULT_REST": {
+                    "type": "integer"
+                },
+                "DEFAULT_POWER": {
+                    "type": "number"
+                },
+                "DEFAULT_POWER_ENDURANCE": {
+                    "type": "number"
+                },
+                "DEFAULT_ENDURANCE": {
+                    "type": "number"
+                },
+                "MIN_ENDURANCE": {
+                    "type": "number"
+                },
+                "MAX_ENDURANCE": {
+                    "type": "number"
+                },
+                "MIN_POWER_ENDURANCE": {
+                    "type": "number"
+                },
+                "MAX_POWER_ENDURANCE": {
+                    "type": "number"
+                },
+                "MIN_POWER": {
+                    "type": "number"
+                },
+                "MAX_POWER": {
+                    "type": "number"
+                },
+                "ENDURANCE_WEIGHT_FROM_BALANCED_RATIO": {
+                    "type": "number"
+                },
+                "POWER_FIRST_REP_SECONDS": {
+                    "type": "integer"
+                },
+                "ENDURANCE_FIRST_REP_SECONDS": {
+                    "type": "integer"
+                },
+                "SECTION_WEIGHT_CURVE_EXPONENT": {
+                    "type": "number"
+                },
+                "SECTION_TIME_CURVE_EXPONENT": {
+                    "type": "number"
+                },
+                "CURVE_SECTIONS": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/CurveSection"
+                    },
+                    "minItems": 5,
+                    "maxItems": 5
+                },
+                "SECTION_CURVE_MODEL": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "Endurance",
+                        "Strength/Endurance",
+                        "Strength",
+                        "Power/Strength",
+                        "Power"
+                    ],
+                    "properties": {
+                        "Endurance": {
+                            "$ref": "#/$defs/SectionCurveModel"
+                        },
+                        "Strength/Endurance": {
+                            "$ref": "#/$defs/SectionCurveModel"
+                        },
+                        "Strength": {
+                            "$ref": "#/$defs/SectionCurveModel"
+                        },
+                        "Power/Strength": {
+                            "$ref": "#/$defs/SectionCurveModel"
+                        },
+                        "Power": {
+                            "$ref": "#/$defs/SectionCurveModel"
+                        }
+                    }
+                },
+                "SESSION_TEMPLATES": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "Endurance",
+                        "Strength/Endurance",
+                        "Strength",
+                        "Power/Strength",
+                        "Power"
+                    ],
+                    "properties": {
+                        "Endurance": {
+                            "$ref": "#/$defs/SessionTemplate"
+                        },
+                        "Strength/Endurance": {
+                            "$ref": "#/$defs/SessionTemplate"
+                        },
+                        "Strength": {
+                            "$ref": "#/$defs/SessionTemplate"
+                        },
+                        "Power/Strength": {
+                            "$ref": "#/$defs/SessionTemplate"
+                        },
+                        "Power": {
+                            "$ref": "#/$defs/SessionTemplate"
+                        }
+                    }
+                },
+                "SECTION_STROKE_COLORS": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "Endurance",
+                        "Strength/Endurance",
+                        "Strength",
+                        "Power/Strength",
+                        "Power"
+                    ],
+                    "properties": {
+                        "Endurance": {
+                            "type": "string"
+                        },
+                        "Strength/Endurance": {
+                            "type": "string"
+                        },
+                        "Strength": {
+                            "type": "string"
+                        },
+                        "Power/Strength": {
+                            "type": "string"
+                        },
+                        "Power": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "idealForceCurve": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "benchmarkWeightKg",
+                    "balancedPowerWeightKg",
+                    "minWeightKg",
+                    "k",
+                    "weightAtTimeSamples",
+                    "idealTimeSamples"
+                ],
+                "properties": {
+                    "benchmarkWeightKg": {
+                        "type": "number"
+                    },
+                    "balancedPowerWeightKg": {
+                        "type": "number"
+                    },
+                    "minWeightKg": {
+                        "type": "number"
+                    },
+                    "k": {
+                        "type": "number"
+                    },
+                    "weightAtTimeSamples": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                                "tSeconds",
+                                "weightKg"
+                            ],
+                            "properties": {
+                                "tSeconds": {
+                                    "type": "number"
+                                },
+                                "weightKg": {
+                                    "type": "number"
+                                }
+                            }
+                        }
+                    },
+                    "idealTimeSamples": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                                "weightKg",
+                                "idealTimeContinuousSeconds",
+                                "idealTimeSeconds"
+                            ],
+                            "properties": {
+                                "weightKg": {
+                                    "type": "number"
+                                },
+                                "idealTimeContinuousSeconds": {
+                                    "type": "number"
+                                },
+                                "idealTimeSeconds": {
+                                    "type": "integer"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "deriveBenchmarkWeight": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "label",
+                    "weightKg",
+                    "timeHeldSeconds",
+                    "expectedBenchmarkWeightKg"
+                ],
+                "properties": {
+                    "label": {
+                        "type": "string"
+                    },
+                    "weightKg": {
+                        "type": "number"
+                    },
+                    "timeHeldSeconds": {
+                        "type": "number"
+                    },
+                    "sourceBenchmarkWeightKg": {
+                        "type": "number"
+                    },
+                    "expectedBenchmarkWeightKg": {
+                        "type": "number"
+                    }
+                }
+            }
+        },
+        "sectionClassification": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "byBenchmarkWeight",
+                "byNormalizedX",
+                "getCurveSection",
+                "sectionProgress",
+                "sectionBoundsAndSuggestions"
+            ],
+            "properties": {
+                "byBenchmarkWeight": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "usedWeightKg",
+                            "maxPowerBenchmarkKg",
+                            "expectedSection"
+                        ],
+                        "properties": {
+                            "usedWeightKg": {
+                                "type": "number"
+                            },
+                            "maxPowerBenchmarkKg": {
+                                "type": "number"
+                            },
+                            "expectedSection": {
+                                "$ref": "#/$defs/CurveSection"
+                            }
+                        }
+                    }
+                },
+                "byNormalizedX": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "normalizedX",
+                            "expectedSection"
+                        ],
+                        "properties": {
+                            "normalizedX": {
+                                "type": "number"
+                            },
+                            "expectedSection": {
+                                "$ref": "#/$defs/CurveSection"
+                            }
+                        }
+                    }
+                },
+                "getCurveSection": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "usedWeightKg",
+                            "benchmarkWeightKg",
+                            "weightMin",
+                            "weightMax",
+                            "expectedSection"
+                        ],
+                        "properties": {
+                            "usedWeightKg": {
+                                "type": "number"
+                            },
+                            "benchmarkWeightKg": {
+                                "type": [
+                                    "number",
+                                    "null"
+                                ]
+                            },
+                            "weightMin": {
+                                "type": [
+                                    "number",
+                                    "null"
+                                ]
+                            },
+                            "weightMax": {
+                                "type": [
+                                    "number",
+                                    "null"
+                                ]
+                            },
+                            "expectedSection": {
+                                "$ref": "#/$defs/CurveSection"
+                            }
+                        }
+                    }
+                },
+                "sectionProgress": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "section",
+                            "expectedProgress"
+                        ],
+                        "properties": {
+                            "section": {
+                                "$ref": "#/$defs/CurveSection"
+                            },
+                            "expectedProgress": {
+                                "type": "number"
+                            }
+                        }
+                    }
+                },
+                "sectionBoundsAndSuggestions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "benchmarkWeightKg",
+                            "balancedPowerWeightKg",
+                            "minWeightKg",
+                            "sections"
+                        ],
+                        "properties": {
+                            "benchmarkWeightKg": {
+                                "type": "number"
+                            },
+                            "balancedPowerWeightKg": {
+                                "type": "number"
+                            },
+                            "minWeightKg": {
+                                "type": "number"
+                            },
+                            "sections": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                        "section",
+                                        "suggestedWeightKg",
+                                        "lowerBoundaryWeightKg",
+                                        "upperBoundaryWeightKg"
+                                    ],
+                                    "properties": {
+                                        "section": {
+                                            "$ref": "#/$defs/CurveSection"
+                                        },
+                                        "suggestedWeightKg": {
+                                            "type": "number"
+                                        },
+                                        "lowerBoundaryWeightKg": {
+                                            "type": "number"
+                                        },
+                                        "upperBoundaryWeightKg": {
+                                            "type": "number"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "repTargetsPerSection": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "sectionModels"
+            ],
+            "properties": {
+                "sectionModels": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "section",
+                            "cases"
+                        ],
+                        "properties": {
+                            "section": {
+                                "$ref": "#/$defs/CurveSection"
+                            },
+                            "cases": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                        "firstHangTarget",
+                                        "reps"
+                                    ],
+                                    "properties": {
+                                        "firstHangTarget": {
+                                            "type": "number"
+                                        },
+                                        "reps": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "additionalProperties": false,
+                                                "required": [
+                                                    "rep",
+                                                    "targetTimeSeconds"
+                                                ],
+                                                "properties": {
+                                                    "rep": {
+                                                        "type": "integer",
+                                                        "minimum": 1
+                                                    },
+                                                    "targetTimeSeconds": {
+                                                        "type": "integer",
+                                                        "minimum": 1
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "manualEnergyCurve": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "sliderBounds",
+                "repTargetCases"
+            ],
+            "properties": {
+                "sliderBounds": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "powerEnduranceMin",
+                        "powerMin",
+                        "powerMax"
+                    ],
+                    "properties": {
+                        "powerEnduranceMin": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                    "endurance",
+                                    "expectedMin"
+                                ],
+                                "properties": {
+                                    "endurance": {
+                                        "type": "number"
+                                    },
+                                    "expectedMin": {
+                                        "type": "number"
+                                    }
+                                }
+                            }
+                        },
+                        "powerMin": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                    "powerEndurance",
+                                    "expectedMin"
+                                ],
+                                "properties": {
+                                    "powerEndurance": {
+                                        "type": "number"
+                                    },
+                                    "expectedMin": {
+                                        "type": "number"
+                                    }
+                                }
+                            }
+                        },
+                        "powerMax": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                    "powerEndurance",
+                                    "expectedMax"
+                                ],
+                                "properties": {
+                                    "powerEndurance": {
+                                        "type": "number"
+                                    },
+                                    "expectedMax": {
+                                        "type": "number"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "repTargetCases": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "label",
+                            "firstHangTarget",
+                            "power",
+                            "powerEndurance",
+                            "endurance",
+                            "reps"
+                        ],
+                        "properties": {
+                            "label": {
+                                "type": "string"
+                            },
+                            "firstHangTarget": {
+                                "type": "number"
+                            },
+                            "power": {
+                                "type": "number"
+                            },
+                            "powerEndurance": {
+                                "type": "number"
+                            },
+                            "endurance": {
+                                "type": "number"
+                            },
+                            "reps": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                        "rep",
+                                        "targetTimeSeconds"
+                                    ],
+                                    "properties": {
+                                        "rep": {
+                                            "type": "integer",
+                                            "minimum": 1
+                                        },
+                                        "targetTimeSeconds": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "forceCurveDataset": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "label",
+                    "workoutHistory",
+                    "maxPowerBenchmarks",
+                    "expected"
+                ],
+                "properties": {
+                    "label": {
+                        "type": "string"
+                    },
+                    "workoutHistory": {
+                        "type": "array",
+                        "items": {
+                            "type": "object"
+                        }
+                    },
+                    "maxPowerBenchmarks": {
+                        "type": "array",
+                        "items": {
+                            "type": "object"
+                        }
+                    },
+                    "expected": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "points",
+                            "weightMin",
+                            "weightMax",
+                            "timeMin",
+                            "timeMax",
+                            "coverage"
+                        ],
+                        "properties": {
+                            "points": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                        "id",
+                                        "weightKg",
+                                        "avgTimeSeconds",
+                                        "firstRepActualTimeSeconds",
+                                        "section",
+                                        "trainingToolTypeId",
+                                        "workoutDate"
+                                    ],
+                                    "properties": {
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "weightKg": {
+                                            "type": "number"
+                                        },
+                                        "avgTimeSeconds": {
+                                            "type": "integer"
+                                        },
+                                        "firstRepActualTimeSeconds": {
+                                            "type": "integer"
+                                        },
+                                        "section": {
+                                            "$ref": "#/$defs/CurveSection"
+                                        },
+                                        "trainingToolTypeId": {
+                                            "type": [
+                                                "string",
+                                                "null"
+                                            ]
+                                        },
+                                        "workoutDate": {
+                                            "type": "string"
+                                        },
+                                        "handSide": {
+                                            "type": [
+                                                "string",
+                                                "null"
+                                            ]
+                                        }
+                                    }
+                                }
+                            },
+                            "weightMin": {
+                                "type": "number"
+                            },
+                            "weightMax": {
+                                "type": "number"
+                            },
+                            "timeMin": {
+                                "type": "number"
+                            },
+                            "timeMax": {
+                                "type": "number"
+                            },
+                            "coverage": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                        "section",
+                                        "count"
+                                    ],
+                                    "properties": {
+                                        "section": {
+                                            "$ref": "#/$defs/CurveSection"
+                                        },
+                                        "count": {
+                                            "type": "integer",
+                                            "minimum": 0
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "$defs": {
+        "CurveSection": {
+            "type": "string",
+            "enum": [
+                "Endurance",
+                "Strength/Endurance",
+                "Strength",
+                "Power/Strength",
+                "Power"
+            ]
+        },
+        "SectionCurveModel": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "weightRatioOfBalanced",
+                "ratioOfSectionTop",
+                "ratioOfSectionBottom",
+                "firstRepTargetSeconds",
+                "repRatios"
+            ],
+            "properties": {
+                "weightRatioOfBalanced": {
+                    "type": "number"
+                },
+                "ratioOfSectionTop": {
+                    "type": "number"
+                },
+                "ratioOfSectionBottom": {
+                    "type": "number"
+                },
+                "firstRepTargetSeconds": {
+                    "type": "integer"
+                },
+                "repRatios": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    },
+                    "minItems": 1
+                }
+            }
+        },
+        "SessionTemplate": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "section",
+                "reps",
+                "rest",
+                "power",
+                "powerEndurance",
+                "endurance",
+                "defaultFirstHangTarget"
+            ],
+            "properties": {
+                "section": {
+                    "$ref": "#/$defs/CurveSection"
+                },
+                "reps": {
+                    "type": "integer"
+                },
+                "rest": {
+                    "type": "integer"
+                },
+                "power": {
+                    "type": "number"
+                },
+                "powerEndurance": {
+                    "type": "number"
+                },
+                "endurance": {
+                    "type": "number"
+                },
+                "defaultFirstHangTarget": {
+                    "type": "integer"
+                }
+            }
+        }
+    }
+}
