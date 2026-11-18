@@ -1,5 +1,7 @@
 # OpenGripsWebFormulas
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
 Language-agnostic mathematical specification and canonical JSON test vectors for the **OpenGrips Ideal Force Curve** and related training utilities.
 
 Instead of manually porting and maintaining copies of logic across services, each project implements the equations from [`SPEC.md`](./SPEC.md) in its own idiomatic language and runs [`test-vectors.json`](./test-vectors.json) directly inside its unit test suite.
@@ -17,6 +19,7 @@ This spec is an export of the [OpenGrips web](https://opengrips.xyz/) app's forc
 | [`test-vectors.schema.json`](./test-vectors.schema.json)         | JSON Schema (Draft 2020-12) describing the structure of `test-vectors.json`.                                                                                                                                                                                   |
 | [`reference/workoutCurve.ts`](./reference/workoutCurve.ts)       | Standalone TypeScript reference implementation matching `OpenGripsWeb/utils/functions/workoutCurve.ts` and related helpers.                                                                                                                                    |
 | [`scripts/generate-vectors.mjs`](./scripts/generate-vectors.mjs) | Zero-dependency Node.js generator and self-verification script that builds `test-vectors.json`.                                                                                                                                                                |
+| [`LICENSE`](./LICENSE)                                           | MIT License.                                                                                                                                                                                                                                                   |
 
 ---
 
@@ -111,3 +114,10 @@ node scripts/generate-vectors.mjs
 ```
 
 The script writes `test-vectors.json` and runs built-in invariant checks before exiting.
+
+---
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE).
+
