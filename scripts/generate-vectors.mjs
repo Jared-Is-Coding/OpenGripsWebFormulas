@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-const OUTPUT_PATH = path.resolve(__dirname, "..", "test-vectors.json")
+const OUTPUT_PATH = process.env.VECTORS_OUTPUT_PATH || path.resolve(__dirname, "..", "test-vectors.json")
 
 // ---------------------------------------------------------------------------
 // Constants (must stay 1:1 with OpenGripsWeb/utils/functions/workoutCurve.ts)
@@ -235,10 +235,78 @@ const getCurveSection = (usedWeightKg, benchmarkWeightKg, weightMin, weightMax) 
 	if (benchmarkWeightKg && benchmarkWeightKg > 0) {
 		return getCurveSectionByBenchmarkWeight(usedWeightKg, benchmarkWeightKg)
 	}
-	const min = weightMin ?? 20
+	const min = weightMin ?? MIN_CURVE_WEIGHT_FLOOR_KG
 	const max = weightMax ?? Math.max(min + 1, usedWeightKg)
 	const normalizedX = normalize(usedWeightKg, min, max)
 	return getCurveSectionByNormalizedX(normalizedX)
+}
+
+const calculateChartAxisBounds = (points, benchmarkWeightKg) => {
+	const validBenchmark =
+		typeof benchmarkWeightKg === "number" && Number.isFinite(benchmarkWeightKg) && benchmarkWeightKg > 0
+			? benchmarkWeightKg
+			: null
+
+	const curveFloor = validBenchmark ? calculateMinWeight(validBenchmark) : MIN_CURVE_WEIGHT_FLOOR_KG
+
+	const weights = points.map((p) => p.weightKg).filter((w) => typeof w === "number" && Number.isFinite(w) && w > 0)
+	const times = points
+		.map((p) => p.timeSeconds ?? p.avgTimeSeconds)
+		.filter((t) => typeof t === "number" && Number.isFinite(t) && t > 0)
+
+	const weightMin = weights.length > 0 ? Math.min(curveFloor, Math.min(...weights)) : curveFloor
+
+	let weightMax
+	if (weights.length > 0) {
+		const heaviest = Math.max(...weights)
+		weightMax = validBenchmark ? Math.max(validBenchmark, heaviest) : heaviest
+	} else {
+		weightMax = validBenchmark ?? 80
+	}
+	if (weightMax <= weightMin) {
+		weightMax = weightMin + 1
+	}
+
+	const timeMin = times.length > 0 ? Math.min(...times) : 20
+	const timeMax = times.length > 0 ? Math.max(...times) : 120
+
+	return {
+		weightMin,
+		weightMax,
+		timeMin,
+		timeMax,
+	}
+}
+
+const calculateSectionCoverage = (points) => {
+	const coverageMap = new Map()
+	CURVE_SECTIONS.forEach((section) => coverageMap.set(section, 0))
+	points.forEach((point) => {
+		const current = coverageMap.get(point.section) ?? 0
+		coverageMap.set(point.section, current + 1)
+	})
+	return CURVE_SECTIONS.map((section) => ({
+		section,
+		count: coverageMap.get(section) ?? 0,
+	}))
+}
+
+const buildChartDataset = (points, benchmarkWeightKg) => {
+	const bounds = calculateChartAxisBounds(points, benchmarkWeightKg)
+	const classifiedPoints = points.map((point) => {
+		const effectiveBenchmark = point.benchmarkWeightKg ?? benchmarkWeightKg ?? null
+		return {
+			...point,
+			section: getCurveSection(point.weightKg, effectiveBenchmark, bounds.weightMin, bounds.weightMax),
+		}
+	})
+	const coverage = calculateSectionCoverage(classifiedPoints)
+
+	return {
+		points: classifiedPoints,
+		...bounds,
+		coverage,
+	}
 }
 
 const getSuggestedSectionWeightKg = (section, benchmarkWeightKg) => {
@@ -319,7 +387,8 @@ const buildForceCurveDataset = (workoutHistory, maxPowerBenchmarks) => {
 				(time) => typeof time === "number" && Number.isFinite(time) && time > 0,
 			)
 			const validTimes = actualTimes.length > 0 ? actualTimes : targetTimes
-			const avgTime = validTimes.length > 0 ? validTimes.reduce((sum, val) => sum + val, 0) / validTimes.length : null
+			const avgTime =
+				validTimes.length > 0 ? validTimes.reduce((sum, val) => sum + val, 0) / validTimes.length : null
 
 			if (!Number.isFinite(weightKg) || weightKg <= 0 || avgTime === null) {
 				return null
@@ -336,25 +405,6 @@ const buildForceCurveDataset = (workoutHistory, maxPowerBenchmarks) => {
 			}
 		})
 		.filter(Boolean)
-
-	if (rows.length === 0) {
-		return {
-			points: [],
-			weightMin: 20,
-			weightMax: 80,
-			timeMin: 20,
-			timeMax: 120,
-			coverage: CURVE_SECTIONS.map((section) => ({
-				section,
-				count: 0,
-			})),
-		}
-	}
-
-	const weightMin = Math.min(...rows.map((row) => row.weightKg))
-	const weightMax = Math.max(...rows.map((row) => row.weightKg))
-	const timeMin = Math.min(...rows.map((row) => row.avgTimeSeconds))
-	const timeMax = Math.max(...rows.map((row) => row.avgTimeSeconds))
 
 	const strongestBenchmarkByTool = new Map()
 	let strongestBenchmarkOverall = 0
@@ -375,35 +425,26 @@ const buildForceCurveDataset = (workoutHistory, maxPowerBenchmarks) => {
 		}
 	})
 
+	const overallBenchmark = strongestBenchmarkOverall > 0 ? strongestBenchmarkOverall : null
+	const bounds = calculateChartAxisBounds(rows, overallBenchmark)
+
 	const points = rows.map((row) => {
 		const benchmarkForTool = row.trainingToolTypeId
 			? (strongestBenchmarkByTool.get(row.trainingToolTypeId) ?? null)
 			: null
-		const benchmarkForRow =
-			benchmarkForTool ?? (strongestBenchmarkOverall > 0 ? strongestBenchmarkOverall : null)
+		const benchmarkForRow = benchmarkForTool ?? overallBenchmark
 		return {
 			...row,
-			section: getCurveSection(row.weightKg, benchmarkForRow, weightMin, weightMax),
+			section: getCurveSection(row.weightKg, benchmarkForRow, bounds.weightMin, bounds.weightMax),
 		}
 	})
 
-	const coverageMap = new Map()
-	CURVE_SECTIONS.forEach((section) => coverageMap.set(section, 0))
-	points.forEach((point) => {
-		const current = coverageMap.get(point.section) ?? 0
-		coverageMap.set(point.section, current + 1)
-	})
+	const coverage = calculateSectionCoverage(points)
 
 	return {
 		points,
-		weightMin,
-		weightMax,
-		timeMin,
-		timeMax,
-		coverage: CURVE_SECTIONS.map((section) => ({
-			section,
-			count: coverageMap.get(section) ?? 0,
-		})),
+		...bounds,
+		coverage,
 	}
 }
 
@@ -547,6 +588,8 @@ const getCurveSectionCases = [
 	{ usedWeightKg: 35, benchmarkWeightKg: null, weightMin: 20, weightMax: 70 },
 	{ usedWeightKg: 45, benchmarkWeightKg: 0, weightMin: 20, weightMax: 70 },
 	{ usedWeightKg: 25, benchmarkWeightKg: null, weightMin: null, weightMax: null },
+	{ usedWeightKg: 13, benchmarkWeightKg: null, weightMin: null, weightMax: 25 },
+	{ usedWeightKg: 1, benchmarkWeightKg: null, weightMin: null, weightMax: 50 },
 ].map((input) => ({
 	...input,
 	expectedSection: getCurveSection(
@@ -655,14 +698,85 @@ const manualEnergyCurve = {
 	})),
 }
 
+const chartAxisAndCoverageCasesRaw = [
+	{
+		label: "standard-points-with-benchmark",
+		benchmarkWeightKg: 90,
+		points: [
+			{ id: "p1", weightKg: 20, timeSeconds: 193 },
+			{ id: "p2", weightKg: 60, timeSeconds: 40 },
+			{ id: "p3", weightKg: 36, timeSeconds: 101 },
+		],
+	},
+	{
+		label: "light-rehab-below-curve-floor",
+		benchmarkWeightKg: 90,
+		points: [
+			{ id: "r1", weightKg: 5, timeSeconds: 180 },
+			{ id: "r2", weightKg: 25, timeSeconds: 120 },
+		],
+	},
+	{
+		label: "low-benchmark-rehab-tool-1kg-floor",
+		benchmarkWeightKg: 30,
+		points: [
+			{ id: "lt1", weightKg: 4, timeSeconds: 160 },
+			{ id: "lt2", weightKg: 15, timeSeconds: 80 },
+			{ id: "lt3", weightKg: 22, timeSeconds: 45 },
+		],
+	},
+	{
+		label: "heavier-workout-than-benchmark",
+		benchmarkWeightKg: 75,
+		points: [
+			{ id: "h1", weightKg: 30, timeSeconds: 90 },
+			{ id: "h2", weightKg: 85, timeSeconds: 12 },
+		],
+	},
+	{
+		label: "no-benchmark-normalized-fallback",
+		benchmarkWeightKg: null,
+		points: [
+			{ id: "nb1", weightKg: 20, timeSeconds: 120 },
+			{ id: "nb2", weightKg: 45, timeSeconds: 70 },
+			{ id: "nb3", weightKg: 70, timeSeconds: 35 },
+		],
+	},
+	{
+		label: "empty-points-with-benchmark",
+		benchmarkWeightKg: 90,
+		points: [],
+	},
+	{
+		label: "empty-points-no-benchmark",
+		benchmarkWeightKg: null,
+		points: [],
+	},
+	{
+		label: "per-point-benchmark-override",
+		benchmarkWeightKg: 90,
+		points: [
+			{ id: "ov1", weightKg: 20, timeSeconds: 193, benchmarkWeightKg: 50 },
+			{ id: "ov2", weightKg: 60, timeSeconds: 40 },
+		],
+	},
+]
+
+const chartAxisAndCoverage = chartAxisAndCoverageCasesRaw.map((entry) => ({
+	...entry,
+	expected: buildChartDataset(entry.points, entry.benchmarkWeightKg),
+}))
+
 const datasetCasesRaw = [
 	{
 		label: "empty-history",
+		opengripsSpecific: true,
 		workoutHistory: [],
 		maxPowerBenchmarks: [],
 	},
 	{
 		label: "kg-workouts-and-benchmark-resolution",
+		opengripsSpecific: true,
 		workoutHistory: [
 			{
 				id: "w1",
@@ -727,6 +841,7 @@ const datasetCasesRaw = [
 	},
 	{
 		label: "no-benchmarks-normalized-fallback",
+		opengripsSpecific: true,
 		workoutHistory: [
 			{
 				id: "n1",
@@ -767,17 +882,20 @@ const forceCurveDataset = datasetCasesRaw.map((entry) => ({
 
 const testVectors = {
 	$schema: "./test-vectors.schema.json",
-	version: "1.0.0",
+	version: "1.0.1",
 	metadata: {
 		description: "Canonical language-agnostic test vectors for OpenGrips Force Curve formulas (all weights in kg)",
 		sourceRepository: "OpenGripsWeb",
-		sourceFiles: [
-			"utils/functions/workoutCurve.ts",
-			"app/workout/WorkoutClient.tsx",
-		],
+		sourceFiles: ["utils/functions/workoutCurve.ts", "app/workout/WorkoutClient.tsx"],
 		tolerances: {
 			floatTolerance: 1e-9,
 			benchmarkDerivationTolerance: 1e-6,
+		},
+		suiteClassification: {
+			chartAxisAndCoverage:
+				"General app suite: axis bounds and section coverage from a list of weight/time points",
+			forceCurveDataset:
+				"OpenGrips.xyz database row ingestion and dataset aggregation suite (specific to opengrips.xyz schema)",
 		},
 	},
 	constants: {
@@ -820,6 +938,7 @@ const testVectors = {
 	},
 	repTargetsPerSection,
 	manualEnergyCurve,
+	chartAxisAndCoverage,
 	forceCurveDataset,
 }
 
@@ -844,7 +963,12 @@ for (const curve of testVectors.idealForceCurve) {
 
 	const atMinWeight = curve.idealTimeSamples.find((s) => Math.abs(s.weightKg - curve.minWeightKg) < 1e-12)
 	assert.equal(atMinWeight.idealTimeSeconds, 193, `t(minWeight) integer for ${curve.benchmarkWeightKg}`)
-	assertApprox(atMinWeight.idealTimeContinuousSeconds, 193, 1e-9, `t(minWeight) continuous for ${curve.benchmarkWeightKg}`)
+	assertApprox(
+		atMinWeight.idealTimeContinuousSeconds,
+		193,
+		1e-9,
+		`t(minWeight) continuous for ${curve.benchmarkWeightKg}`,
+	)
 }
 
 for (const entry of testVectors.deriveBenchmarkWeight) {
@@ -874,18 +998,83 @@ for (const entry of testVectors.sectionClassification.sectionBoundsAndSuggestion
 
 for (const sec of testVectors.repTargetsPerSection.sectionModels) {
 	for (const c of sec.cases) {
-		assert.equal(c.reps[0].targetTimeSeconds, Math.max(1, Math.round(c.firstHangTarget)), "Rep 1 equals firstHangTarget")
+		assert.equal(
+			c.reps[0].targetTimeSeconds,
+			Math.max(1, Math.round(c.firstHangTarget)),
+			"Rep 1 equals firstHangTarget",
+		)
 		for (const r of c.reps) {
 			assert.ok(Number.isInteger(r.targetTimeSeconds) && r.targetTimeSeconds >= 1)
 		}
 	}
 }
 
+// Chart Axis Bounds & General Coverage assertions
+const standardCase = testVectors.chartAxisAndCoverage.find((c) => c.label === "standard-points-with-benchmark")
+assertApprox(standardCase.expected.weightMin, calculateMinWeight(90), 1e-9, "Chart weightMin = curve floor (10.45 kg)")
+assert.equal(standardCase.expected.weightMax, 90, "Chart weightMax = benchmark (90 kg)")
+assert.equal(
+	standardCase.expected.coverage.reduce((acc, item) => acc + item.count, 0),
+	3,
+)
+
+const lightRehabCase = testVectors.chartAxisAndCoverage.find((c) => c.label === "light-rehab-below-curve-floor")
+assert.equal(
+	lightRehabCase.expected.weightMin,
+	5,
+	"Chart weightMin lowers to lightest workout (5 kg) when below curve floor",
+)
+assert.equal(lightRehabCase.expected.weightMax, 90, "Chart weightMax = benchmark (90 kg)")
+
+const lowBenchmarkCase = testVectors.chartAxisAndCoverage.find((c) => c.label === "low-benchmark-rehab-tool-1kg-floor")
+assert.equal(lowBenchmarkCase.expected.weightMin, 1, "Chart weightMin clamps to 1 kg floor for low benchmark")
+assert.equal(lowBenchmarkCase.expected.weightMax, 30, "Chart weightMax = benchmark (30 kg)")
+
+const heavyWorkoutCase = testVectors.chartAxisAndCoverage.find((c) => c.label === "heavier-workout-than-benchmark")
+assertApprox(
+	heavyWorkoutCase.expected.weightMin,
+	calculateMinWeight(75),
+	1e-9,
+	"Chart weightMin = curve floor for 75 kg",
+)
+assert.equal(heavyWorkoutCase.expected.weightMax, 85, "Chart weightMax expands to heaviest workout (85 kg > 75 kg)")
+
+const noBenchmarkCase = testVectors.chartAxisAndCoverage.find((c) => c.label === "no-benchmark-normalized-fallback")
+assert.equal(noBenchmarkCase.expected.weightMin, 1, "Chart weightMin = 1 kg floor when no benchmark")
+assert.equal(noBenchmarkCase.expected.weightMax, 70, "Chart weightMax = heaviest workout (70 kg)")
+
+const emptyNoBenchCase = testVectors.chartAxisAndCoverage.find((c) => c.label === "empty-points-no-benchmark")
+assert.equal(emptyNoBenchCase.expected.weightMin, 1, "Empty chart weightMin = 1 kg floor")
+assert.equal(emptyNoBenchCase.expected.weightMax, 80, "Empty chart weightMax = 80 kg default")
+
+// OpenGrips database row adapter assertions
 assert.equal(testVectors.forceCurveDataset[0].expected.points.length, 0)
+assert.equal(testVectors.forceCurveDataset[0].expected.weightMin, 1, "Empty OpenGrips DB dataset floor is 1 kg")
 assert.equal(testVectors.forceCurveDataset[1].expected.points.length, 3)
+assertApprox(
+	testVectors.forceCurveDataset[1].expected.weightMin,
+	calculateMinWeight(90),
+	1e-9,
+	"OpenGrips dataset weightMin is curve floor (10.45 kg)",
+)
+assert.equal(
+	testVectors.forceCurveDataset[1].expected.weightMax,
+	90,
+	"OpenGrips dataset weightMax is benchmark (90 kg)",
+)
 assert.equal(
 	testVectors.forceCurveDataset[1].expected.coverage.reduce((acc, item) => acc + item.count, 0),
 	3,
+)
+assert.equal(
+	testVectors.forceCurveDataset[2].expected.weightMin,
+	1,
+	"OpenGrips no-benchmark fallback weightMin is 1 kg",
+)
+assert.equal(
+	testVectors.forceCurveDataset[2].expected.weightMax,
+	70,
+	"OpenGrips no-benchmark fallback weightMax is 70 kg",
 )
 
 fs.writeFileSync(OUTPUT_PATH, `${JSON.stringify(testVectors, null, 2)}\n`, "utf8")

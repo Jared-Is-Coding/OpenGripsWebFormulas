@@ -209,11 +209,176 @@ export const getCurveSection = (
 	if (benchmarkWeightKg && benchmarkWeightKg > 0) {
 		return getCurveSectionByBenchmarkWeight(usedWeightKg, benchmarkWeightKg)
 	}
-	const min = weightMin ?? 20
+	const min = weightMin ?? MIN_CURVE_WEIGHT_FLOOR_KG
 	const max = weightMax ?? Math.max(min + 1, usedWeightKg)
 	const normalizedX = normalize(usedWeightKg, min, max)
 	return getCurveSectionByNormalizedX(normalizedX)
 }
+
+export const calculateMinWeight = (benchmarkWeight: number): number => {
+	return Math.max(
+		MIN_CURVE_WEIGHT_FLOOR_KG,
+		benchmarkWeight * BALANCED_RATIO * SECTION_CURVE_MODEL.Endurance.weightRatioOfBalanced -
+			ENDURANCE_MIN_WEIGHT_OFFSET_KG,
+	)
+}
+
+export const calculateDecayConstant = (benchmarkWeight: number): number => {
+	const minWeight = calculateMinWeight(benchmarkWeight)
+	const k =
+		-Math.log(Math.max(minWeight / Math.max(benchmarkWeight, CURVE_EPSILON), CURVE_EPSILON)) /
+		(CURVE_T_END_SECONDS - CURVE_T0_SECONDS)
+	return k === 0 ? 0 : k
+}
+
+export const calculateWeightAtTime = (timeSeconds: number, benchmarkWeight: number): number => {
+	const k = calculateDecayConstant(benchmarkWeight)
+	return benchmarkWeight * Math.exp(-k * (timeSeconds - CURVE_T0_SECONDS))
+}
+
+export const calculateIdealTime = (weightKg: number, benchmarkWeight: number): number => {
+	const k = calculateDecayConstant(benchmarkWeight)
+	if (k === 0) return 0
+	const idealTime = CURVE_T0_SECONDS - Math.log(weightKg / Math.max(benchmarkWeight, CURVE_EPSILON)) / k
+	return Math.max(1, Math.round(idealTime))
+}
+
+export const calculateIdealTimeContinuous = (weightKg: number, benchmarkWeight: number): number => {
+	const k = calculateDecayConstant(benchmarkWeight)
+	if (k === 0) return 0
+	const idealTime = CURVE_T0_SECONDS - Math.log(weightKg / Math.max(benchmarkWeight, CURVE_EPSILON)) / k
+	return Math.max(1, idealTime)
+}
+
+// ---------------------------------------------------------------------------
+// General Chart Axis Bounds & Coverage (Language-Agnostic / App-Independent)
+// ---------------------------------------------------------------------------
+
+export type ChartBounds = {
+	weightMin: number
+	weightMax: number
+	timeMin: number
+	timeMax: number
+}
+
+export type SectionCoverageItem = {
+	section: CurveSection
+	count: number
+}
+
+export type ChartWeightTimePoint = {
+	id?: string
+	weightKg: number
+	timeSeconds: number
+	benchmarkWeightKg?: number | null
+}
+
+export type ClassifiedChartPoint = ChartWeightTimePoint & {
+	section: CurveSection
+}
+
+export type ChartDataset = {
+	points: ClassifiedChartPoint[]
+	weightMin: number
+	weightMax: number
+	timeMin: number
+	timeMax: number
+	coverage: SectionCoverageItem[]
+}
+
+/**
+ * Calculates chart axis bounds across weight and time.
+ *
+ * Weight axis spans from the lower of the curve's floor and the lightest workout
+ * to the higher of the benchmark and the heaviest workout. Below ~48.4 kg benchmark
+ * (or when no benchmark is provided), the curve floor clamps to 1 kg.
+ */
+export const calculateChartAxisBounds = (
+	points: Array<{ weightKg: number; timeSeconds?: number; avgTimeSeconds?: number }>,
+	benchmarkWeightKg?: number | null,
+): ChartBounds => {
+	const validBenchmark =
+		typeof benchmarkWeightKg === "number" && Number.isFinite(benchmarkWeightKg) && benchmarkWeightKg > 0
+			? benchmarkWeightKg
+			: null
+
+	const curveFloor = validBenchmark ? calculateMinWeight(validBenchmark) : MIN_CURVE_WEIGHT_FLOOR_KG
+
+	const weights = points.map((p) => p.weightKg).filter((w) => typeof w === "number" && Number.isFinite(w) && w > 0)
+	const times = points
+		.map((p) => p.timeSeconds ?? p.avgTimeSeconds)
+		.filter((t): t is number => typeof t === "number" && Number.isFinite(t) && t > 0)
+
+	const weightMin = weights.length > 0 ? Math.min(curveFloor, Math.min(...weights)) : curveFloor
+
+	let weightMax: number
+	if (weights.length > 0) {
+		const heaviest = Math.max(...weights)
+		weightMax = validBenchmark ? Math.max(validBenchmark, heaviest) : heaviest
+	} else {
+		weightMax = validBenchmark ?? 80
+	}
+	if (weightMax <= weightMin) {
+		weightMax = weightMin + 1
+	}
+
+	const timeMin = times.length > 0 ? Math.min(...times) : 20
+	const timeMax = times.length > 0 ? Math.max(...times) : 120
+
+	return {
+		weightMin,
+		weightMax,
+		timeMin,
+		timeMax,
+	}
+}
+
+/**
+ * Counts occurrences of points in each curve section.
+ */
+export const calculateSectionCoverage = (
+	points: Array<{ section: CurveSection }>,
+): SectionCoverageItem[] => {
+	const coverageMap = new Map<CurveSection, number>()
+	CURVE_SECTIONS.forEach((section) => coverageMap.set(section, 0))
+	points.forEach((point) => {
+		const current = coverageMap.get(point.section) ?? 0
+		coverageMap.set(point.section, current + 1)
+	})
+	return CURVE_SECTIONS.map((section) => ({
+		section,
+		count: coverageMap.get(section) ?? 0,
+	}))
+}
+
+/**
+ * General chart dataset builder from clean weight/time points.
+ * Apps with their own storage (such as Crimpdeq) can use this directly.
+ */
+export const buildChartDataset = (
+	points: ChartWeightTimePoint[],
+	benchmarkWeightKg?: number | null,
+): ChartDataset => {
+	const bounds = calculateChartAxisBounds(points, benchmarkWeightKg)
+	const classifiedPoints: ClassifiedChartPoint[] = points.map((point) => {
+		const effectiveBenchmark = point.benchmarkWeightKg ?? benchmarkWeightKg ?? null
+		return {
+			...point,
+			section: getCurveSection(point.weightKg, effectiveBenchmark, bounds.weightMin, bounds.weightMax),
+		}
+	})
+	const coverage = calculateSectionCoverage(classifiedPoints)
+
+	return {
+		points: classifiedPoints,
+		...bounds,
+		coverage,
+	}
+}
+
+// ---------------------------------------------------------------------------
+// OpenGrips.xyz Database Row Ingestion Adapter (Specific to opengrips.xyz DB)
+// ---------------------------------------------------------------------------
 
 export type MaxPowerBenchmarkRow = {
 	id: string
@@ -250,9 +415,16 @@ export type ForceCurveDataset = {
 	weightMax: number
 	timeMin: number
 	timeMax: number
-	coverage: { section: CurveSection; count: number }[]
+	coverage: SectionCoverageItem[]
 }
 
+/**
+ * Adapter specifically for opengrips.xyz database rows:
+ * - Parses `used_weight` strings / numbers
+ * - Falls back from `actual_result_times` to `target_times`
+ * - Resolves per-tool benchmarks (`training_tool_type_id`)
+ * - Delegates axis bounds and coverage calculation to general chart functions
+ */
 export const buildForceCurveDataset = (
 	workoutHistory: ForceCurveWorkoutInput[],
 	maxPowerBenchmarks: MaxPowerBenchmarkRow[],
@@ -286,25 +458,6 @@ export const buildForceCurveDataset = (
 		})
 		.filter((item): item is NonNullable<typeof item> => Boolean(item))
 
-	if (rows.length === 0) {
-		return {
-			points: [],
-			weightMin: 20,
-			weightMax: 80,
-			timeMin: 20,
-			timeMax: 120,
-			coverage: CURVE_SECTIONS.map((section) => ({
-				section,
-				count: 0,
-			})),
-		}
-	}
-
-	const weightMin = Math.min(...rows.map((row) => row.weightKg))
-	const weightMax = Math.max(...rows.map((row) => row.weightKg))
-	const timeMin = Math.min(...rows.map((row) => row.avgTimeSeconds))
-	const timeMax = Math.max(...rows.map((row) => row.avgTimeSeconds))
-
 	const strongestBenchmarkByTool = new Map<string, number>()
 	let strongestBenchmarkOverall = 0
 	maxPowerBenchmarks.forEach((benchmarkRow) => {
@@ -324,71 +477,27 @@ export const buildForceCurveDataset = (
 		}
 	})
 
-	const points = rows.map((row) => {
+	const overallBenchmark = strongestBenchmarkOverall > 0 ? strongestBenchmarkOverall : null
+	const bounds = calculateChartAxisBounds(rows, overallBenchmark)
+
+	const points: ForceCurvePoint[] = rows.map((row) => {
 		const benchmarkForTool = row.trainingToolTypeId
 			? (strongestBenchmarkByTool.get(row.trainingToolTypeId) ?? null)
 			: null
-		const benchmarkForRow =
-			benchmarkForTool ?? (strongestBenchmarkOverall > 0 ? strongestBenchmarkOverall : null)
+		const benchmarkForRow = benchmarkForTool ?? overallBenchmark
 		return {
 			...row,
-			section: getCurveSection(row.weightKg, benchmarkForRow, weightMin, weightMax),
+			section: getCurveSection(row.weightKg, benchmarkForRow, bounds.weightMin, bounds.weightMax),
 		}
 	})
 
-	const coverageMap = new Map<CurveSection, number>()
-	CURVE_SECTIONS.forEach((section) => coverageMap.set(section, 0))
-	points.forEach((point) => {
-		const current = coverageMap.get(point.section) ?? 0
-		coverageMap.set(point.section, current + 1)
-	})
+	const coverage = calculateSectionCoverage(points)
 
 	return {
 		points,
-		weightMin,
-		weightMax,
-		timeMin,
-		timeMax,
-		coverage: CURVE_SECTIONS.map((section) => ({
-			section,
-			count: coverageMap.get(section) ?? 0,
-		})),
+		...bounds,
+		coverage,
 	}
-}
-
-export const calculateMinWeight = (benchmarkWeight: number): number => {
-	return Math.max(
-		MIN_CURVE_WEIGHT_FLOOR_KG,
-		benchmarkWeight * BALANCED_RATIO * SECTION_CURVE_MODEL.Endurance.weightRatioOfBalanced -
-			ENDURANCE_MIN_WEIGHT_OFFSET_KG,
-	)
-}
-
-export const calculateDecayConstant = (benchmarkWeight: number): number => {
-	const minWeight = calculateMinWeight(benchmarkWeight)
-	const k =
-		-Math.log(Math.max(minWeight / Math.max(benchmarkWeight, CURVE_EPSILON), CURVE_EPSILON)) /
-		(CURVE_T_END_SECONDS - CURVE_T0_SECONDS)
-	return k === 0 ? 0 : k
-}
-
-export const calculateWeightAtTime = (timeSeconds: number, benchmarkWeight: number): number => {
-	const k = calculateDecayConstant(benchmarkWeight)
-	return benchmarkWeight * Math.exp(-k * (timeSeconds - CURVE_T0_SECONDS))
-}
-
-export const calculateIdealTime = (weightKg: number, benchmarkWeight: number): number => {
-	const k = calculateDecayConstant(benchmarkWeight)
-	if (k === 0) return 0
-	const idealTime = CURVE_T0_SECONDS - Math.log(weightKg / Math.max(benchmarkWeight, CURVE_EPSILON)) / k
-	return Math.max(1, Math.round(idealTime))
-}
-
-export const calculateIdealTimeContinuous = (weightKg: number, benchmarkWeight: number): number => {
-	const k = calculateDecayConstant(benchmarkWeight)
-	if (k === 0) return 0
-	const idealTime = CURVE_T0_SECONDS - Math.log(weightKg / Math.max(benchmarkWeight, CURVE_EPSILON)) / k
-	return Math.max(1, idealTime)
 }
 
 export const deriveBenchmarkWeight = (weightKg: number, timeHeld: number): number => {

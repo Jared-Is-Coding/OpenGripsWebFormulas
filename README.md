@@ -12,14 +12,14 @@ This spec is an export of the [OpenGrips web](https://opengrips.xyz/) app's forc
 
 ## Repository Contents
 
-| File                                                             | Description                                                                                                                                                                                                                                                    |
-| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`SPEC.md`](./SPEC.md)                                           | Mathematical specification: constants, formulas, rounding semantics, and edge cases.                                                                                                                                                                           |
-| [`test-vectors.json`](./test-vectors.json)                       | Canonical JSON test vectors covering `minWeight`, `k`, `W(t)`, `t(W)`, `deriveBenchmarkWeight`, section classification, section bounds & suggestions, rep targets per section, manual energy curve rep targets, and dataset aggregation (all weights in `kg`). |
-| [`test-vectors.schema.json`](./test-vectors.schema.json)         | JSON Schema (Draft 2020-12) describing the structure of `test-vectors.json`.                                                                                                                                                                                   |
-| [`reference/workoutCurve.ts`](./reference/workoutCurve.ts)       | Standalone TypeScript reference implementation matching `OpenGripsWeb/utils/functions/workoutCurve.ts` and related helpers.                                                                                                                                    |
-| [`scripts/generate-vectors.mjs`](./scripts/generate-vectors.mjs) | Zero-dependency Node.js generator and self-verification script that builds `test-vectors.json`.                                                                                                                                                                |
-| [`LICENSE`](./LICENSE)                                           | MIT License.                                                                                                                                                                                                                                                   |
+| File                                                             | Description                                                                                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`SPEC.md`](./SPEC.md)                                           | Mathematical specification: constants, formulas, rounding semantics, edge cases, chart axis bounds, and dataset adapters.                                                                                                                                                                                   |
+| [`test-vectors.json`](./test-vectors.json)                       | Canonical JSON test vectors covering `minWeight`, `k`, `W(t)`, `t(W)`, `deriveBenchmarkWeight`, section classification, section bounds & suggestions, rep targets, manual energy curve, general chart bounds & coverage (`chartAxisAndCoverage`), and OpenGrips.xyz DB row ingestion (`forceCurveDataset`). |
+| [`test-vectors.schema.json`](./test-vectors.schema.json)         | JSON Schema (Draft 2020-12) describing the structure of `test-vectors.json`.                                                                                                                                                                                                                                |
+| [`reference/workoutCurve.ts`](./reference/workoutCurve.ts)       | Standalone TypeScript reference implementation of the formulas, general chart bounds (`calculateChartAxisBounds`), and the OpenGrips database adapter (`buildForceCurveDataset`).                                                                                                                           |
+| [`scripts/generate-vectors.mjs`](./scripts/generate-vectors.mjs) | Zero-dependency Node.js generator and self-verification script that builds `test-vectors.json`.                                                                                                                                                                                                             |
+| [`LICENSE`](./LICENSE)                                           | MIT License.                                                                                                                                                                                                                                                                                                |
 
 ---
 
@@ -34,15 +34,19 @@ This spec is an export of the [OpenGrips web](https://opengrips.xyz/) app's forc
     - Binary-search inversion from an observed `(weightKg, timeHeldSeconds)` hold to theoretical 5-second max weight `W5`, plus round-trip and edge-case vectors.
 3. **Section Classification & Boundaries (`sectionClassification`)**
     - Benchmark-driven band classification (`getCurveSectionByBenchmarkWeight`)
-    - Normalized-X fallback classification (`getCurveSectionByNormalizedX`)
+    - Normalized-X fallback classification (`getCurveSectionByNormalizedX`) with default 1 kg floor (`MIN_CURVE_WEIGHT_FLOOR_KG`)
     - Combined `getCurveSection`, `getSectionProgress`, per-section `suggestedWeightKg`, and section lower/upper weight boundaries.
 4. **Repetition Targets Per Section (`repTargetsPerSection`)**
     - Section model rep ratios (`SECTION_CURVE_MODEL[section].repRatios`) across reps `1..8`
 5. **Manual Energy System Curve (`manualEnergyCurve`)**
     - Coupled slider bounds (`getPowerEnduranceMin`, `getPowerMin`, `getPowerMax`)
     - Exponential tail-blended rep targets (`power`, `powerEndurance`, `endurance`)
-6. **Force Curve Dataset Aggregation (`forceCurveDataset`)**
-    - End-to-end `buildForceCurveDataset` vectors (all weights in `kg`) including fallback from `actual_result_times` to `target_times`, tool-specific benchmark lookup, and section coverage counts.
+6. **General Chart Axis Bounds & Section Coverage (`chartAxisAndCoverage`)**
+    - App-independent suite for any application (e.g. Crimpdeq, native mobile apps) operating on lists of clean `{ weightKg, timeSeconds }` hold points.
+    - Spans the weight axis from the lower of the curve's floor and the lightest workout to the higher of the benchmark and the heaviest workout.
+    - Clamps the floor to 1 kg for benchmarks below $\approx 48.4\text{ kg}$ and for unbenchmarked fallbacks to ensure full visibility for rehab and lighter training tools.
+7. **OpenGrips.xyz Database Ingestion Adapter (`forceCurveDataset`)**
+    - Suite specifically validating the `opengrips.xyz` database row adapter (`buildForceCurveDataset`): string-to-number parsing (`used_weight`), fallback from `actual_result_times` to `target_times`, and per-tool benchmark lookups (`training_tool_type_id`).
 
 ---
 
@@ -70,6 +74,14 @@ for (const curve of vectors.idealForceCurve) {
 		)
 		assert.equal(myIdealTime(sample.weightKg, curve.benchmarkWeightKg), sample.idealTimeSeconds)
 	}
+}
+
+// Chart axis bounds and section coverage (general points)
+for (const chartCase of vectors.chartAxisAndCoverage) {
+	const result = myBuildChartDataset(chartCase.points, chartCase.benchmarkWeightKg)
+	assert.ok(Math.abs(result.weightMin - chartCase.expected.weightMin) <= tol)
+	assert.equal(result.weightMax, chartCase.expected.weightMax)
+	assert.deepEqual(result.coverage, chartCase.expected.coverage)
 }
 ```
 
@@ -120,4 +132,3 @@ The script writes `test-vectors.json` and runs built-in invariant checks before 
 ## License
 
 This project is licensed under the [MIT License](./LICENSE).
-

@@ -15,6 +15,7 @@
         "sectionClassification",
         "repTargetsPerSection",
         "manualEnergyCurve",
+        "chartAxisAndCoverage",
         "forceCurveDataset"
     ],
     "properties": {
@@ -61,6 +62,17 @@
                         "benchmarkDerivationTolerance": {
                             "type": "number",
                             "exclusiveMinimum": 0
+                        }
+                    }
+                },
+                "suiteClassification": {
+                    "type": "object",
+                    "properties": {
+                        "chartAxisAndCoverage": {
+                            "type": "string"
+                        },
+                        "forceCurveDataset": {
+                            "type": "string"
                         }
                     }
                 }
@@ -720,8 +732,140 @@
                 }
             }
         },
+        "chartAxisAndCoverage": {
+            "type": "array",
+            "description": "General suite: axis bounds and section coverage computed directly from weight/time points and benchmark.",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "label",
+                    "benchmarkWeightKg",
+                    "points",
+                    "expected"
+                ],
+                "properties": {
+                    "label": {
+                        "type": "string"
+                    },
+                    "benchmarkWeightKg": {
+                        "type": [
+                            "number",
+                            "null"
+                        ]
+                    },
+                    "points": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                                "weightKg",
+                                "timeSeconds"
+                            ],
+                            "properties": {
+                                "id": {
+                                    "type": "string"
+                                },
+                                "weightKg": {
+                                    "type": "number"
+                                },
+                                "timeSeconds": {
+                                    "type": "number"
+                                },
+                                "benchmarkWeightKg": {
+                                    "type": [
+                                        "number",
+                                        "null"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "expected": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "points",
+                            "weightMin",
+                            "weightMax",
+                            "timeMin",
+                            "timeMax",
+                            "coverage"
+                        ],
+                        "properties": {
+                            "points": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                        "weightKg",
+                                        "timeSeconds",
+                                        "section"
+                                    ],
+                                    "properties": {
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "weightKg": {
+                                            "type": "number"
+                                        },
+                                        "timeSeconds": {
+                                            "type": "number"
+                                        },
+                                        "benchmarkWeightKg": {
+                                            "type": [
+                                                "number",
+                                                "null"
+                                            ]
+                                        },
+                                        "section": {
+                                            "$ref": "#/$defs/CurveSection"
+                                        }
+                                    }
+                                }
+                            },
+                            "weightMin": {
+                                "type": "number"
+                            },
+                            "weightMax": {
+                                "type": "number"
+                            },
+                            "timeMin": {
+                                "type": "number"
+                            },
+                            "timeMax": {
+                                "type": "number"
+                            },
+                            "coverage": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                        "section",
+                                        "count"
+                                    ],
+                                    "properties": {
+                                        "section": {
+                                            "$ref": "#/$defs/CurveSection"
+                                        },
+                                        "count": {
+                                            "type": "integer",
+                                            "minimum": 0
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "forceCurveDataset": {
             "type": "array",
+            "description": "OpenGrips.xyz database row ingestion and dataset aggregation suite (specific to opengrips.xyz schema).",
             "items": {
                 "type": "object",
                 "additionalProperties": false,
@@ -734,6 +878,9 @@
                 "properties": {
                     "label": {
                         "type": "string"
+                    },
+                    "opengripsSpecific": {
+                        "type": "boolean"
                     },
                     "workoutHistory": {
                         "type": "array",

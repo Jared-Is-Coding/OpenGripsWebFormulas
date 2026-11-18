@@ -1,6 +1,6 @@
 # OpenGripsWeb Force Curve Specification
 
-**Version:** `1.0.0`
+**Version:** `1.0.1`
 
 This document specifies the mathematical models, constants, edge-case rules, and utility algorithms used by OpenGripsWeb for the **Ideal Force Curve**, **5-Second Benchmark Derivation**, **Curve Section Classification**, and **Workout Calculations**. All weights in this specification are in kilograms (`kg`).
 
@@ -295,11 +295,13 @@ getCurveSection(usedWeightKg, benchmarkWeightKg = null, weightMin = null, weight
   if benchmarkWeightKg is truthy and benchmarkWeightKg > 0:
     return getCurveSectionByBenchmarkWeight(usedWeightKg, benchmarkWeightKg)
 
-  minW = weightMin ?? 20
+  minW = weightMin ?? 1
   maxW = weightMax ?? max(minW + 1, usedWeightKg)
   normalizedX = normalize(usedWeightKg, minW, maxW)
   return getCurveSectionByNormalizedX(normalizedX)
 ```
+
+> **Design note on floor:** The fallback lower bound is `1` kg (`MIN_CURVE_WEIGHT_FLOOR_KG`). A fixed 20 kg start would hide most of the curve for rehab training and lighter tools (such as pinch blocks or monos). Because benchmarks below $\approx 48.4\text{ kg}$ clamp to a 1 kg curve floor, defaulting to 1 kg ensures consistent visibility down to low-load protocols.
 
 ### 5.5 Section Progress (`getSectionProgress`)
 
@@ -409,6 +411,56 @@ getManualEnergyTargetTimeForRep(rep, baseFirstHangTarget, power, powerEndurance,
   targetRatio = tailRatio + (rep2Ratio - tailRatio) * pow(decayFactor, stepFromRep2)
   return round(baseFirstHangTarget * targetRatio)
 ```
+
+### 6.4 General Chart Axis Bounds & Section Coverage (`calculateChartAxisBounds`, `calculateSectionCoverage`, `buildChartDataset`)
+
+For any application displaying a force curve chart from a list of clean weight/time points and an optional benchmark:
+
+#### Weight Axis Spanning Rules
+
+The chart weight axis spans:
+
+- **Minimum (`weightMin`):** From the lower of the curve's floor and the lightest workout.
+- **Maximum (`weightMax`):** To the higher of the benchmark and the heaviest workout.
+
+```text
+curveFloor = (benchmarkWeight > 0)
+  ? minWeight(benchmarkWeight)
+  : 1
+
+weightMin = (points.length > 0)
+  ? min(curveFloor, min(points.weights))
+  : curveFloor
+
+weightMax = (points.length > 0)
+  ? ((benchmarkWeight > 0) ? max(benchmarkWeight, max(points.weights)) : max(points.weights))
+  : (benchmarkWeight ?? 80)
+
+if weightMax <= weightMin:
+  weightMax = weightMin + 1
+```
+
+#### Time Axis Spanning Rules
+
+- **Minimum (`timeMin`):** `min(points.times)` if points exist, otherwise `20`.
+- **Maximum (`timeMax`):** `max(points.times)` if points exist, otherwise `120`.
+
+#### Point Section Classification & Coverage
+
+1. Each point is classified using `getCurveSection(point.weightKg, point.benchmarkWeightKg ?? overallBenchmark, weightMin, weightMax)`.
+2. Coverage tallies counts for each section in `CURVE_SECTIONS` (`["Endurance", "Strength/Endurance", "Strength", "Power/Strength", "Power"]`).
+
+### 6.5 OpenGrips.xyz Database Row Adapter (`buildForceCurveDataset`)
+
+> [!NOTE]
+> The `forceCurveDataset` test suite is specific to the `opengrips.xyz` database row schema and application conventions:
+>
+> 1. Ingesting `used_weight` as strings, numbers, or null (e.g. `"60"` or `20`).
+> 2. Hang duration fallback: prioritizing valid positive entries in `actual_result_times`, falling back to `target_times`, and taking the arithmetic mean (`avgTimeSeconds = round(avg(validTimes))`).
+> 3. Resolving per-tool benchmark weights via `training_tool_type_id` against `maxPowerBenchmarks`.
+> 4. Delegating chart bounds and coverage calculation to the general formulas in Section 6.4.
+>
+> Other client applications (such as Crimpdeq or native apps) should implement against Section 6.4 (`chartAxisAndCoverage`) using their own domain models.
 
 ---
 
